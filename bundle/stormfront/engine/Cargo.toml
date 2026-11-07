@@ -1,0 +1,18 @@
+[package]
+name = "stormfront"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+description = "Stormfront: convective-storm, tornado, damage and Doppler-radar simulation for Horizon (Minecraft Java in Rust)."
+publish = false
+
+# Standard library only: a Horizon bundle crate may depend only on crates already in
+# Horizon's Cargo.lock, and the simulation needs none. The crate never depends on the game;
+# the bundle's glue (glue.rs, render.rs) binds it to Horizon's hook points.
+[dependencies]
+
+[lints.clippy]
+too_many_arguments = "allow"
+needless_range_loop = "allow"
+excessive_precision = "allow"

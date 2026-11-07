@@ -1,0 +1,5 @@
+# Development workspace: builds and tests the mod's simulation crate on its own, without a
+# Horizon checkout. The bundle the launcher builds is bundle/stormfront/.
+[workspace]
+members = ["bundle/stormfront/engine"]
+resolver = "2"
