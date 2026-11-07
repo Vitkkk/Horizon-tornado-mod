@@ -1,0 +1,10 @@
+[package]
+name = "stormfront-lite-hosttest"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Runs the packed Stormfront Lite component in a wasmtime host with Horizon Android's limits"
+
+[dependencies]
+wasmtime = { version = "=48.0.8", default-features = false, features = ["component-model", "cranelift", "runtime"] }

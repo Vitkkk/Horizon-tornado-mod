@@ -1,0 +1,11 @@
+[package]
+name = "stormfront-lite-tools"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Packs Stormfront Lite into a .hmod and checks it in a wasmtime host with Horizon's limits"
+
+[dependencies]
+wit-component = "=0.254.2"
+wit-parser = "0.254"

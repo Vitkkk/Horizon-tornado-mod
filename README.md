@@ -10,6 +10,35 @@ Doppler (REF, VEL, CC) e levantamento pós-evento no estilo Enhanced Fujita.
 > verificada por compilação contra as assinaturas reais, mas ainda não compilada dentro do Horizon
 > nem jogada.** Veja [Verificação](#verificação) para o que foi e o que não foi testado.
 
+## Duas versões
+
+| Versão | Arquivo | Para | Como funciona |
+| --- | --- | --- | --- |
+| **Stormfront** (completa) | `stormfront-0.1.0.hnmod` (`python3 tools/package.py`) | Horizon de PC com o launcher oficial | mod nativo compilado dentro do jogo: danos lendo cada bloco, detritos físicos, partículas 3D próprias, levantamento EF |
+| **Stormfront Lite** | `stormfront_lite-0.1.0.hmod` (`android/build.sh`) | **Horizon Android** (port NepThunder 0.7.x) e outros que rodam mods `.hmod` em WebAssembly | mod WASM de cliente: mesma atmosfera, tempestades, vórtice 3D e radar; danos por `fill ... replace <material>` onde o vento simulado vence a resistência daquele material; partículas, detritos, chuva e raios vanilla |
+
+O Horizon Android não compila mods nativos (`.hnmod` é recusado: "wrong extension"); ele roda
+`.hmod` WebAssembly em sandbox. Por isso existe a versão Lite.
+
+### Instalar no Horizon Android
+
+1. Gere com `android/build.sh` (ou baixe o `.hmod`).
+2. No app: **Installed → Import Mod** e escolha `stormfront_lite-0.1.0.hmod`.
+3. Em **Installed → Mods**, ligue o Stormfront Lite (pacotes novos vêm desligados) e reinicie o mundo.
+4. Use um mundo **com cheats** (o mod executa comandos vanilla como você) e descartável:
+   `/storm env outbreak`, `/tornado spawn wedge`, `/radar open`, `/radar product velocity`.
+
+Comandos da Lite: `/storm <tipo>|env|debug|clear|tornado`, `/tornado spawn <forma>|intensity|speed|multivortex|damage|dissipate|list|survey`,
+`/radar open|close|product|range|tilt|here`, `/sfx particles low|medium|high|lightning|sound|shake|weather on|off`.
+
+Verificado aqui: o componente foi rodado num host `wasmtime 48.0.8` (a versão do port) com os limites
+do jogo (fuel por tick, memória, 256 comandos, 8 linhas de chat, 1024 formas): 60 s de tornado wedge
+com radar ligado sem nenhum *trap*, pico de 39% do fuel do tick. Não foi testado no celular.
+
+O que a Lite não tem: leitura de blocos (logo, sem colapso estrutural nem classificação EF por danos
+— o levantamento mostra trajeto, largura e vento), partículas que seguem o vento continuamente (são
+partículas vanilla lançadas com a velocidade do vento), escavação profunda do solo.
+
 ## O que foi encontrado no Horizon (antes de programar)
 
 Inspecionei o código-fonte real (`horizon-rust/horizon`, Nightly `nightly-source/2026-11-05-f319701`):
@@ -60,6 +89,11 @@ bundle/stormfront/                 o pacote nativo (vira mixins/stormfront/ no .
   glue.rs                          liga o crate aos hooks do jogo (módulo em game.rs)
   render.rs                        passe wgpu no hook world_drawn (módulo em horizon-client-render)
   *.rs                             helpers de uma linha, um por hook
+android/                           Stormfront Lite (WASM .hmod para Horizon Android)
+  stormfront-lite/                 o mod: lite.rs (lógica) e lib.rs (bindings WIT do Horizon)
+  tools/                           componentiza com wit-component 0.254.2, como o Horizon faz
+  hosttest/                        roda o componente em wasmtime 48.0.8 com os limites do jogo
+  build.sh                         testes, build, checagem e target/stormfront_lite-<versão>.hmod
 tools/package.py                   gera target/stormfront-<versão>.hnmod reprodutível
 tools/verify-horizon.sh            prepara (stage) e compila o Horizon real com o mod
 docs/ARQUITETURA.md                fluxo de dados, threads, protocolo e modelos físicos

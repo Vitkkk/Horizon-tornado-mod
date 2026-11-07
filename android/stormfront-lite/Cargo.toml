@@ -1,0 +1,14 @@
+[package]
+name = "stormfront-lite"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Stormfront Lite: storms, tornadoes and a Doppler radar as a WebAssembly client mod for Horizon Android"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+stormfront = { path = "../../bundle/stormfront/engine" }
+wit-bindgen = { version = "=0.60.0", default-features = false, features = ["macros", "realloc"] }

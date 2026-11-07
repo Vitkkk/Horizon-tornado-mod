@@ -1,0 +1,11 @@
+# Stormfront Lite: the WebAssembly client mod for Horizon builds that run `.hmod` code mods
+# (Horizon Android 0.7.x). Its own workspace, so the PC workspace stays light.
+[workspace]
+members = ["stormfront-lite", "tools", "hosttest"]
+resolver = "2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+debug = false

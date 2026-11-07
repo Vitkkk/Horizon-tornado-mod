@@ -1,0 +1,8 @@
+id = "stormfront_lite"
+name = "Stormfront Lite"
+version = "0.1.0"
+description = "Supercells and tornadoes with a 3D wind field, damage by material, debris, ground scouring and a Doppler radar (REF/VEL/CC). /storm, /tornado, /radar, /sfx. Needs cheats: it runs vanilla commands as you."
+authors = ["Vitkkk"]
+api = "0.1"
+side = "client"
+capabilities = ["game-read", "chat", "hud", "storage", "command", "render"]
