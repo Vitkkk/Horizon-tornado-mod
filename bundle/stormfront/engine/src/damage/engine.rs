@@ -90,8 +90,10 @@ const EFFECT_CAP: usize = 256;
 
 impl DamageEngine {
     pub fn new(settings: &ServerSettings, seed: u64) -> Self {
+        let mut window = VoxelWindow::new();
+        window.cap = settings.max_cached_columns.max(4096);
         DamageEngine {
-            window: VoxelWindow::new(),
+            window,
             debris: DebrisSystem::new(settings.max_debris, seed),
             effects: Vec::new(),
             downburst: TornadoRecord::new(0, 0, 0),
@@ -119,7 +121,7 @@ impl DamageEngine {
             if t.params.v_max < 18.0 {
                 continue;
             }
-            let r = (t.radius_of_wind(26.0) + settings.damage_margin).clamp(16.0, 480.0);
+            let r = (t.radius_of_wind(28.0) + settings.damage_margin).clamp(16.0, 480.0);
             out.push(Footprint { center: t.pos, radius: r, tornado: Some(t.id), peak: t.peak_wind() });
         }
         for s in &sys.storms {
@@ -128,6 +130,16 @@ impl DamageEngine {
                 if peak > 26.0 {
                     out.push(Footprint { center: m.pos, radius: (m.radius * 2.2).min(480.0), tornado: None, peak });
                 }
+            }
+        }
+        // the cache must hold every footprint: when they need more than it, trim them all
+        // alike (the outer edge of a large footprint has the weakest winds)
+        let area: f64 = out.iter().map(|f| std::f64::consts::PI * (f.radius + 48.0).powi(2)).sum();
+        let budget = settings.max_cached_columns as f64 * 0.8;
+        if area > budget {
+            let k = (budget / area).sqrt();
+            for f in &mut out {
+                f.radius = (f.radius * k).max(16.0);
             }
         }
         out
@@ -195,10 +207,11 @@ impl DamageEngine {
                 }
             }
         }
-        if self.ticks % 100 == 0 {
-            let keep: Vec<(f64, f64)> = sys.tornadoes.iter().map(|t| (t.pos.x, t.pos.z)).chain(feet.iter().map(|f| (f.center.x, f.center.z))).collect();
+        if self.ticks % 40 == 0 || self.window.full() {
+            // keep what the current footprints cover (plus a margin ahead), drop what is behind
+            let keep: Vec<(f64, f64, f64)> = feet.iter().map(|f| (f.center.x, f.center.z, f.radius + 48.0)).collect();
             let stale = self.time - 45.0;
-            self.window.evict(&keep, 560.0, stale);
+            self.window.evict(&keep, stale);
             let window = &self.window;
             self.chunks.retain(|&(cx, cz), _| window.has_column(cx * 16, cz * 16) || window.has_column(cx * 16 + 15, cz * 16 + 15));
             self.fatigue.retain(|_, f| *f > 0.02);
@@ -238,6 +251,9 @@ impl DamageEngine {
         wanted.sort_by(|a, b| a.0.total_cmp(&b.0));
         wanted.dedup_by_key(|w| w.1);
         let mut read = 0;
+        if self.window.full() {
+            return 0;
+        }
         for &(_, (cx, cz)) in wanted.iter().take(max_chunks) {
             let cols: Vec<(i32, i32)> = (0..16).flat_map(|dx| (0..16).map(move |dz| (cx * 16 + dx, cz * 16 + dz))).collect();
             match io.read_columns(&cols, READ_BELOW, READ_ABOVE) {

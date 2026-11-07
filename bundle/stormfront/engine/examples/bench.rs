@@ -60,6 +60,7 @@ fn main() {
     let mut server_ms = Vec::new();
     let mut client_ms = Vec::new();
     let mut host_ms = Vec::new();
+    let mut peak_columns = 0usize;
     let ticks: usize = std::env::var("BENCH_TICKS").ok().and_then(|v| v.parse().ok()).unwrap_or(20 * 30);
     for _ in 0..ticks {
         let t0 = Instant::now();
@@ -72,6 +73,7 @@ fn main() {
         }
         server_ms.push(engine_ms);
         host_ms.push(host);
+        peak_columns = peak_columns.max(sim.damage.window.column_count());
         for m in &out {
             client.on_message(&m.data);
         }
@@ -82,6 +84,7 @@ fn main() {
     let r = sim.records.values().next().or(sim.finished.last());
     println!("server tick (wedge 95 m/s over a town, {} s), engine only:", ticks / 20);
     println!("  median {:.2} ms, p95 {:.2} ms, max {:.2} ms", percentile(&mut server_ms.clone(), 0.5), percentile(&mut server_ms.clone(), 0.95), percentile(&mut server_ms, 1.0));
+    println!("  peak cached columns {peak_columns} (~{:.0} MB of block data)", peak_columns as f64 * (42.0 * 2.0 + 80.0) / 1e6);
     println!("  (the in-memory test world's reads/edits took a further median {:.2} ms; Horizon's are native)", percentile(&mut host_ms, 0.5));
     if let Some(r) = r {
         println!("  {} blocks destroyed, {} debris launched, {} column reads", r.blocks_destroyed, r.debris_launched, world.reads);

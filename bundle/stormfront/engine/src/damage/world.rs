@@ -7,7 +7,9 @@ use super::materials::{AIR, Material, classify};
 use crate::math::FastMap;
 use std::collections::HashMap;
 
-pub type StateId = u32;
+/// Interned block state. 16 bits keep cached columns small; a world has far fewer distinct
+/// states than that, and any beyond it read as air.
+pub type StateId = u16;
 
 /// Interned block states with their materials.
 #[derive(Debug, Default)]
@@ -21,6 +23,9 @@ impl Palette {
     pub fn intern(&mut self, state: &str) -> StateId {
         if let Some(&id) = self.index.get(state) {
             return id;
+        }
+        if self.states.len() >= StateId::MAX as usize {
+            return 0;
         }
         let id = self.states.len() as StateId;
         self.states.push(state.to_string());
@@ -87,8 +92,11 @@ pub trait WorldIo {
 }
 
 /// Blocks read below and above each column's height.
-pub const READ_BELOW: u32 = 40;
-pub const READ_ABOVE: u32 = 12;
+pub const READ_BELOW: u32 = 32;
+pub const READ_ABOVE: u32 = 10;
+
+/// Default for the most columns the engine keeps (`ServerSettings::max_cached_columns`).
+pub const MAX_COLUMNS: usize = 180_000;
 
 #[derive(Debug, Default)]
 pub struct VoxelWindow {
@@ -98,11 +106,13 @@ pub struct VoxelWindow {
     pending: FastMap<(i32, i32), Vec<(i32, StateId)>>,
     pending_count: usize,
     air: StateId,
+    /// Most columns kept; past it, those farthest from every footprint go first.
+    pub cap: usize,
 }
 
 impl VoxelWindow {
     pub fn new() -> Self {
-        let mut w = VoxelWindow::default();
+        let mut w = VoxelWindow { cap: MAX_COLUMNS, ..Default::default() };
         w.air = w.palette.intern("minecraft:air");
         w
     }
@@ -259,19 +269,32 @@ impl VoxelWindow {
         self.pending_count
     }
 
-    /// Forget columns farther than `radius` from every point of `keep`, and columns read
-    /// before `stale_before` (they will be read again when needed).
-    pub fn evict(&mut self, keep: &[(f64, f64)], radius: f64, stale_before: f64) {
-        let r2 = radius * radius;
+    /// Forget columns outside every circle of `keep` (centre x, z and radius), and columns
+    /// read before `stale_before` (they are read again when needed). Columns with unflushed
+    /// edits stay. Past `MAX_COLUMNS`, the farthest go too.
+    pub fn evict(&mut self, keep: &[(f64, f64, f64)], stale_before: f64) {
         let pending = &self.pending;
-        self.columns.retain(|&(x, z), c| {
-            let near = keep.iter().any(|&(kx, kz)| {
-                let dx = x as f64 - kx;
-                let dz = z as f64 - kz;
-                dx * dx + dz * dz <= r2
-            });
-            pending.contains_key(&(x, z)) || (near && c.read_at >= stale_before)
-        });
+        let dist = |x: i32, z: i32| -> f64 {
+            keep.iter()
+                .map(|&(kx, kz, r)| ((x as f64 - kx).powi(2) + (z as f64 - kz).powi(2)).sqrt() - r)
+                .fold(f64::INFINITY, f64::min)
+        };
+        self.columns.retain(|&(x, z), c| pending.contains_key(&(x, z)) || (dist(x, z) <= 0.0 && c.read_at >= stale_before));
+        if self.columns.len() > self.cap {
+            let mut by: Vec<(f64, (i32, i32))> = self.columns.keys().map(|&(x, z)| (dist(x, z), (x, z))).collect();
+            by.sort_unstable_by(|a, b| b.0.total_cmp(&a.0));
+            let extra = self.columns.len() - self.cap * 9 / 10;
+            for (_, k) in by.into_iter().take(extra) {
+                if !self.pending.contains_key(&k) {
+                    self.columns.remove(&k);
+                }
+            }
+        }
+    }
+
+    /// Whether the cache is full (the engine then reads no more).
+    pub fn full(&self) -> bool {
+        self.columns.len() >= self.cap
     }
 
     /// Iterate over cached column coordinates.

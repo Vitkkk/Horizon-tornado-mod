@@ -103,6 +103,10 @@ pub struct ServerSettings {
     pub debris_sync_interval_ticks: u32,
     /// Whether storms form on their own from the environment.
     pub natural_storms: bool,
+    /// Most block columns the damage engine caches (about 160 bytes each). When the
+    /// footprints of all tornadoes and downbursts need more, their outer, weakest fringes are
+    /// trimmed. Raise it on servers with memory to spare.
+    pub max_cached_columns: usize,
 }
 
 impl Default for ServerSettings {
@@ -117,6 +121,7 @@ impl Default for ServerSettings {
             sync_interval_ticks: 5,
             debris_sync_interval_ticks: 2,
             natural_storms: false,
+            max_cached_columns: 180_000,
         }
     }
 }
