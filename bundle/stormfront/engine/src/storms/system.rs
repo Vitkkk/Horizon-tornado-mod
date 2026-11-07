@@ -105,7 +105,10 @@ impl StormSystem {
         if distance <= 0.0 {
             // a storm conjured in place starts mature
             s.age = 1500.0;
+            s.genesis_cooldown = 0.0;
         }
+        // derive its updraft, precipitation and stage now, not on the next step
+        s.step(0.0, &self.env, 0.0);
         self.storms.push(s);
         self.events.push(WeatherEvent::StormFormed { id });
         id
