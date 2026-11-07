@@ -105,7 +105,7 @@ pub fn now() -> f64 {
 }
 
 /// The particle shader (WGSL), compiled by the render module.
-pub const PARTICLE_WGSL: &str = include_str!("../shaders/particles.wgsl");
+pub const PARTICLE_WGSL: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/data/particles.wgsl"));
 
 #[cfg(test)]
 mod tests {

@@ -4,6 +4,7 @@
 // block by block.
 
 use super::materials::{AIR, Material, classify};
+use crate::math::FastMap;
 use std::collections::HashMap;
 
 pub type StateId = u32;
@@ -13,7 +14,7 @@ pub type StateId = u32;
 pub struct Palette {
     states: Vec<String>,
     materials: Vec<Material>,
-    index: HashMap<String, StateId>,
+    index: FastMap<String, StateId>,
 }
 
 impl Palette {
@@ -92,8 +93,10 @@ pub const READ_ABOVE: u32 = 12;
 #[derive(Debug, Default)]
 pub struct VoxelWindow {
     pub palette: Palette,
-    columns: HashMap<(i32, i32), Column>,
-    pending: HashMap<[i32; 3], StateId>,
+    columns: FastMap<(i32, i32), Column>,
+    /// Changes not yet written to the world, by column: (y, state).
+    pending: FastMap<(i32, i32), Vec<(i32, StateId)>>,
+    pending_count: usize,
     air: StateId,
 }
 
@@ -151,7 +154,14 @@ impl VoxelWindow {
             return false;
         }
         c.blocks[i as usize] = state;
-        self.pending.insert(pos, state);
+        let col = self.pending.entry((pos[0], pos[2])).or_default();
+        match col.iter_mut().find(|(y, _)| *y == pos[1]) {
+            Some(e) => e.1 = state,
+            None => {
+                col.push((pos[1], state));
+                self.pending_count += 1;
+            }
+        }
         true
     }
 
@@ -193,9 +203,9 @@ impl VoxelWindow {
                 col.original_ground = col.ground;
             }
             // keep our own unflushed edits over what the world still says
-            for (pos, &state) in &self.pending {
-                if pos[0] == x && pos[2] == z {
-                    let k = pos[1] - min_y;
+            if let Some(edits) = self.pending.get(&(x, z)) {
+                for &(y, state) in edits {
+                    let k = y - min_y;
                     if k >= 0 && (k as usize) < col.blocks.len() {
                         col.blocks[k as usize] = state;
                     }
@@ -223,19 +233,30 @@ impl VoxelWindow {
 
     /// Up to `max` queued changes, as states, oldest positions first by coordinate.
     pub fn take_edits(&mut self, max: usize) -> Vec<([i32; 3], String)> {
-        let mut keys: Vec<[i32; 3]> = self.pending.keys().copied().collect();
-        keys.sort_unstable();
-        keys.truncate(max);
-        keys.into_iter()
-            .map(|k| {
-                let s = self.pending.remove(&k).unwrap();
-                (k, self.palette.state(s).to_string())
-            })
-            .collect()
+        let mut cols: Vec<(i32, i32)> = self.pending.keys().copied().collect();
+        cols.sort_unstable();
+        let mut out = Vec::new();
+        for c in cols {
+            if out.len() >= max {
+                break;
+            }
+            let Some(mut edits) = self.pending.remove(&c) else { continue };
+            edits.sort_unstable_by_key(|e| e.0);
+            let room = max - out.len();
+            if edits.len() > room {
+                let rest = edits.split_off(room);
+                self.pending.insert(c, rest);
+            }
+            self.pending_count -= edits.len();
+            for (y, s) in edits {
+                out.push(([c.0, y, c.1], self.palette.state(s).to_string()));
+            }
+        }
+        out
     }
 
     pub fn pending_edits(&self) -> usize {
-        self.pending.len()
+        self.pending_count
     }
 
     /// Forget columns farther than `radius` from every point of `keep`, and columns read
@@ -249,8 +270,7 @@ impl VoxelWindow {
                 let dz = z as f64 - kz;
                 dx * dx + dz * dz <= r2
             });
-            let has_pending = pending.keys().any(|p| p[0] == x && p[2] == z);
-            has_pending || (near && c.read_at >= stale_before)
+            pending.contains_key(&(x, z)) || (near && c.read_at >= stale_before)
         });
     }
 

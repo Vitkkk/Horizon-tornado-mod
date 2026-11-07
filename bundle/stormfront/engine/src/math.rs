@@ -228,6 +228,54 @@ impl Rng {
     }
 }
 
+/// A fast, non-cryptographic hasher (the Fx algorithm) for maps keyed by block and column
+/// coordinates, which std's SipHash makes needlessly slow on hot paths. Not for untrusted keys.
+#[derive(Clone, Copy, Default)]
+pub struct FxHasher {
+    hash: u64,
+}
+
+impl std::hash::Hasher for FxHasher {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        for chunk in bytes.chunks(8) {
+            let mut v = [0u8; 8];
+            v[..chunk.len()].copy_from_slice(chunk);
+            self.add(u64::from_le_bytes(v));
+        }
+    }
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.add(i as u64);
+    }
+    #[inline]
+    fn write_i32(&mut self, i: i32) {
+        self.add(i as u32 as u64);
+    }
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.add(i);
+    }
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.add(i as u64);
+    }
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.hash
+    }
+}
+
+impl FxHasher {
+    #[inline]
+    fn add(&mut self, w: u64) {
+        self.hash = (self.hash.rotate_left(5) ^ w).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
+}
+
+pub type FastMap<K, V> = std::collections::HashMap<K, V, std::hash::BuildHasherDefault<FxHasher>>;
+pub type FastSet<K> = std::collections::HashSet<K, std::hash::BuildHasherDefault<FxHasher>>;
+
 /// Hash of integer coordinates to [0, 1): stable per-block randomness (material variation,
 /// construction quality) that every side computes alike without storing anything.
 #[inline]

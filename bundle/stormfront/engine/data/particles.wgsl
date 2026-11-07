@@ -162,7 +162,8 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
     }
     if u.screen.z > 0.5 {
         // soft particles: fade where the world is just behind, hide where it is in front
-        let px = vec2<i32>(in.clip.xy * u.params.zw);
+        let dims = vec2<i32>(textureDimensions(depth_tex));
+        let px = clamp(vec2<i32>(in.clip.xy * u.params.zw), vec2<i32>(0, 0), dims - vec2<i32>(1, 1));
         let scene = textureLoad(depth_tex, px, 0);
         let scene_dist = u.params.y / max(scene, 1e-7);
         let fade = clamp((scene_dist - in.dist) / max(u.screen.w, 0.01), 0.0, 1.0);

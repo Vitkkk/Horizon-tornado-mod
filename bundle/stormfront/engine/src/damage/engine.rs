@@ -14,7 +14,7 @@ use super::survey::TornadoRecord;
 use super::vegetation::{TreeOutcome, TreeState, count_leaves, debark_rate, felled_trunk, find_trunk, step_tree, stripped};
 use super::world::{READ_ABOVE, READ_BELOW, VoxelWindow, WorldIo};
 use crate::config::ServerSettings;
-use crate::math::{Rng, Vec3, hash01};
+use crate::math::{FastMap, Rng, Vec3, hash01};
 use crate::storms::system::StormSystem;
 use std::collections::HashMap;
 
@@ -75,11 +75,11 @@ pub struct DamageEngine {
     pub effects: Vec<Effect>,
     /// Damage done by downbursts (straight-line winds), outside any tornado's survey.
     pub downburst: TornadoRecord,
-    chunks: HashMap<(i32, i32), ChunkState>,
-    fatigue: HashMap<[i32; 3], f32>,
-    trees: HashMap<[i32; 3], TreeState>,
-    scour: HashMap<(i32, i32), ScourState>,
-    abrasion: HashMap<[i32; 3], f32>,
+    chunks: FastMap<(i32, i32), ChunkState>,
+    fatigue: FastMap<[i32; 3], f32>,
+    trees: FastMap<[i32; 3], TreeState>,
+    scour: FastMap<(i32, i32), ScourState>,
+    abrasion: FastMap<[i32; 3], f32>,
     pub time: f64,
     ticks: u64,
     rng: Rng,
@@ -95,11 +95,11 @@ impl DamageEngine {
             debris: DebrisSystem::new(settings.max_debris, seed),
             effects: Vec::new(),
             downburst: TornadoRecord::new(0, 0, 0),
-            chunks: HashMap::new(),
-            fatigue: HashMap::new(),
-            trees: HashMap::new(),
-            scour: HashMap::new(),
-            abrasion: HashMap::new(),
+            chunks: FastMap::default(),
+            fatigue: FastMap::default(),
+            trees: FastMap::default(),
+            scour: FastMap::default(),
+            abrasion: FastMap::default(),
             time: 0.0,
             ticks: 0,
             rng: Rng::new(seed ^ 0xDA3A6E),
@@ -145,7 +145,9 @@ impl DamageEngine {
             let chosen = self.choose_chunks(&feet, budget.eval_columns / 256 + 1);
             for (cx, cz, fp) in chosen {
                 let st = self.chunks.entry((cx, cz)).or_default();
-                let cdt = (self.time - st.evaluated_at).clamp(dt, 2.0);
+                // exposure since the chunk's last evaluation; distant, weaker parts of a large
+                // footprint are visited less often and integrate a longer step
+                let cdt = (self.time - st.evaluated_at).clamp(dt, 5.0);
                 st.evaluated_at = self.time;
                 let wet = wetness(sys, Vec3::new(cx as f64 * 16.0 + 8.0, 0.0, cz as f64 * 16.0 + 8.0));
                 let mut removed = Vec::new();
@@ -297,21 +299,21 @@ impl DamageEngine {
         let top = self.window.top(x, z).unwrap_or(g);
         let (xf, zf) = (x as f64 + 0.5, z as f64 + 0.5);
         // wind at a few heights above the ground, interpolated for each block
-        let heights = [1.5, 5.0, 12.0, 28.0];
-        let samples: [Vec3; 4] = heights.map(|h| sys.wind_at(Vec3::new(xf, g as f64 + h, zf)));
+        let heights = [1.5, 6.0, 20.0];
+        let samples: [Vec3; 3] = heights.map(|h| sys.wind_at(Vec3::new(xf, g as f64 + h, zf)));
         let peak = samples.iter().map(|v| v.length()).fold(0.0, f64::max);
         let wind_at = |y: f64| -> Vec3 {
             let h = y - g as f64;
             if h <= heights[0] {
                 return samples[0];
             }
-            for i in 0..3 {
+            for i in 0..2 {
                 if h <= heights[i + 1] {
                     let t = (h - heights[i]) / (heights[i + 1] - heights[i]);
                     return samples[i].lerp(samples[i + 1], t);
                 }
             }
-            samples[3]
+            samples[2]
         };
         // the survey counts what stood here the first time the tornado reached it
         let tid = fp.tornado.unwrap_or(0);

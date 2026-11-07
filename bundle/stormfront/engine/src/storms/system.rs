@@ -337,10 +337,6 @@ impl StormSystem {
     /// own winds and every tornado. Used for straight-line damage, particles and debris.
     pub fn wind_at(&self, at: Vec3) -> Vec3 {
         let h = (at.y - self.ground_y).max(0.5);
-        let ambient = match self.storm_near(at) {
-            Some(s) => s.wind(&self.env, at, h),
-            None => self.env.wind(h),
-        };
         // a tornado's ground-relative field (its own flow plus its translation) replaces the
         // ambient flow near its core instead of adding to it, fading out over its outer flow
         let mut own = Vec3::ZERO;
@@ -354,6 +350,13 @@ impl StormSystem {
                 weight = weight.max(1.0 - smoothstep(inner, outer, d));
             }
         }
+        if weight >= 0.999 {
+            return own;
+        }
+        let ambient = match self.storm_near(at) {
+            Some(s) => s.wind(&self.env, at, h),
+            None => self.env.wind(h),
+        };
         ambient * (1.0 - weight) + own
     }
 

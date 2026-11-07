@@ -1,0 +1,180 @@
+# Stormfront: storms, tornadoes, damage and a Doppler radar for Horizon.
+#
+# Every injection names a hook point of Horizon's catalog (native-hooks.json) and a helper of
+# the pinned source; nothing hooks a raw internal function. The simulation is the `engine`
+# crate (standard library only); `render.rs` and `glue.rs` bind it to the renderer and the game.
+
+[mod]
+id = "stormfront"
+version = "0.1.0"
+priority = 100
+
+# The Nightly it was written against (2026-11-05, NATIVE_HOOKS_API 409).
+[compatibility]
+horizon_revision = "f319701e8c9ab657ff562250b3ba07b2d654e3bc"
+
+# The simulation. The renderer depends on it; the game reaches it through the renderer's
+# `stormfront_render::engine` re-export (the game depends on the renderer).
+[[crate]]
+id = "engine"
+path = "engine"
+dependent = "horizon-client-render"
+
+[[module]]
+id = "render"
+file = "crates/horizon-client-render/src/lib.rs"
+name = "stormfront_render"
+source = "render.rs"
+visibility = "pub"
+
+[[module]]
+id = "glue"
+file = "crates/horizon-client/src/game.rs"
+name = "stormfront_glue"
+source = "glue.rs"
+
+# ---- server half ----------------------------------------------------------------------------
+
+[[injection]]
+id = "level_tick_post"
+hook = "level_tick_post"
+hook_version = 1
+kind = "HEAD"
+helper = "level_tick_post.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "dimension", ty = "&str", value = "dimension" },
+]
+
+[[injection]]
+id = "register_commands"
+hook = "register_commands"
+hook_version = 1
+kind = "HEAD"
+helper = "register_commands.rs"
+bindings = [
+  { name = "commands", ty = "&mut Vec<crate::game::native_server::NativeCommand>", value = "&mut *commands" },
+]
+
+[[injection]]
+id = "perform_command"
+hook = "perform_command"
+hook_version = 1
+kind = "HEAD"
+helper = "perform_command.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "player", ty = "&crate::game::native_server::NativeServerPlayer", value = "player" },
+  { name = "command", ty = "&str", value = "command" },
+  { name = "ran", ty = "&mut bool", value = "&mut *ran" },
+]
+
+[[injection]]
+id = "world_lifecycle"
+hook = "world_lifecycle"
+hook_version = 1
+kind = "HEAD"
+helper = "world_lifecycle.rs"
+bindings = [
+  { name = "phase", ty = "horizon_client::mod_api::WorldPhase", value = "phase" },
+]
+
+# ---- client half ----------------------------------------------------------------------------
+
+[[injection]]
+id = "net_from_server"
+hook = "net_from_server"
+hook_version = 1
+kind = "HEAD"
+helper = "net_from_server.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "channel", ty = "&str", value = "channel" },
+  { name = "data", ty = "&[u8]", value = "data" },
+]
+
+[[injection]]
+id = "tick"
+hook = "tick"
+hook_version = 1
+kind = "HEAD"
+helper = "tick.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+[[injection]]
+id = "hud"
+hook = "hud"
+hook_version = 1
+kind = "HEAD"
+helper = "hud.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "batch", ty = "&mut horizon_client::hud::HudBatch", value = "&mut *batch" },
+  { name = "corners", ty = "&mut horizon_client::extras_hud::Corners", value = "&mut *corners" },
+]
+
+[[injection]]
+id = "commands"
+hook = "commands"
+hook_version = 1
+kind = "HEAD"
+helper = "commands.rs"
+bindings = [{ name = "commands", ty = "&mut Vec<&'static str>", value = "&mut *commands" }]
+
+[[injection]]
+id = "command"
+hook = "command"
+hook_version = 1
+kind = "HEAD"
+helper = "command.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "command", ty = "&str", value = "command" },
+  { name = "ran", ty = "&mut bool", value = "&mut *ran" },
+]
+
+[[injection]]
+id = "camera_shake"
+hook = "camera_shake"
+hook_version = 1
+kind = "HEAD"
+helper = "camera_shake.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "partial", ty = "f32", value = "partial" },
+  { name = "shake", ty = "&mut crate::game::native_hooks::NativeShake", value = "&mut *shake" },
+]
+
+[[injection]]
+id = "client_level_unload"
+hook = "client_level_unload"
+hook_version = 1
+kind = "HEAD"
+helper = "client_level_unload.rs"
+bindings = [{ name = "dimension", ty = "&str", value = "dimension" }]
+
+[[injection]]
+id = "mods"
+hook = "mods"
+hook_version = 1
+kind = "HEAD"
+helper = "mods.rs"
+bindings = [{ name = "mods", ty = "&mut Vec<crate::game::native_hooks::NativeMod>", value = "&mut *mods" }]
+
+# ---- renderer -------------------------------------------------------------------------------
+
+[[injection]]
+id = "world_drawn"
+hook = "world_drawn"
+hook_version = 1
+kind = "HEAD"
+helper = "world_drawn.rs"
+bindings = [{ name = "world", ty = "&mut crate::gfx::native_render::WorldDrawn<'_>", value = "&mut *world" }]
+
+[[injection]]
+id = "render_needs"
+hook = "render_needs"
+hook_version = 1
+kind = "HEAD"
+helper = "render_needs.rs"
+bindings = [{ name = "needs", ty = "&mut crate::gfx::native_render::RenderNeeds", value = "&mut *needs" }]
