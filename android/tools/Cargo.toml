@@ -9,3 +9,5 @@ description = "Packs Stormfront Lite into a .hmod and checks it in a wasmtime ho
 [dependencies]
 wit-component = "=0.254.2"
 wit-parser = "0.254"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"

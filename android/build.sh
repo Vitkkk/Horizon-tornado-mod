@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 rustup target add wasm32-unknown-unknown >/dev/null 2>&1 || true
 cargo test --release -p stormfront-lite
 cargo build --release --target wasm32-unknown-unknown -p stormfront-lite
-cargo run --release -p stormfront-lite-tools -- pack target/wasm32-unknown-unknown/release/stormfront_lite.wasm target/mod.wasm
+cargo run --release -p stormfront-lite-tools -- pack target/wasm32-unknown-unknown/release/stormfront_lite.wasm target/mod.wasm stormfront-lite/horizon-mod.toml
 cargo run --release -p stormfront-lite-hosttest -- target/mod.wasm
 python3 - <<'PY'
 import re, zipfile, pathlib

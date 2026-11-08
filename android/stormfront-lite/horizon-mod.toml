@@ -6,3 +6,6 @@ authors = ["Vitkkk"]
 api = "0.1"
 side = "client"
 capabilities = ["game-read", "chat", "hud", "storage", "command", "render"]
+# The radar panel and camera shake use Horizon's `render` capability, which is experimental
+# (it may change in any release); the game asks mods to opt in to it explicitly.
+experimental = ["render"]
